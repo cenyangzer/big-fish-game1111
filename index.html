@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>深海吞食 · 大鱼吃小鱼</title>
+<style>
+  :root {
+    --bg: #061321;
+    --panel: rgba(11, 30, 48, 0.92);
+    --line: rgba(120, 200, 235, 0.18);
+    --text: #e8f6ff;
+    --muted: #8fb4c9;
+    --accent: #4fd1c5;
+    --gold: #ffd166;
+    --danger: #ff6b7a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100%; }
+  body {
+    background: radial-gradient(circle at 50% -10%, #123a56 0%, var(--bg) 55%, #030a12 100%);
+    color: var(--text);
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 18px 16px 28px;
+  }
+  .app { width: 100%; max-width: 1000px; }
+  .topbar { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  .title { font-size: 22px; font-weight: 700; letter-spacing: 2px; margin: 0; }
+  .title span { color: var(--accent); }
+  .subtitle { font-size: 12px; color: var(--muted); letter-spacing: 1px; }
+  .hud {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+    gap: 10px;
+    align-items: stretch;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+  }
+  .stat { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .stat .label { font-size: 11px; color: var(--muted); letter-spacing: 1px; }
+  .stat .value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .stat .value small { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 3px; }
+  #scoreVal { color: var(--gold); }
+  #radiusVal { color: var(--accent); }
+  #levelVal { color: #a5e8ff; font-size: 17px; }
+  .hearts { display: flex; gap: 6px; align-items: center; height: 100%; }
+  .heart { width: 13px; height: 13px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 9px rgba(255,107,122,.6); }
+  .heart.lost { background: rgba(255,255,255,.13); box-shadow: none; }
+  .hud-actions { display: flex; align-items: center; gap: 8px; }
+  .btn {
+    border: 1px solid rgba(79, 209, 197, .5);
+    background: linear-gradient(180deg, rgba(79,209,197,.22), rgba(79,209,197,.08));
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 9px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform .12s ease, background .12s ease;
+  }
+  .btn:hover { background: rgba(79,209,197,.34); transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn.small { padding: 7px 12px; font-size: 12px; }
+  .growth { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+  .growth .bar { flex: 1; height: 6px; border-radius: 6px; background: rgba(255,255,255,.09); overflow: hidden; }
+  .growth .bar > i { display: block; height: 100%; width: 0%; border-radius: 6px; background: linear-gradient(90deg, #4fd1c5, #ffd166); transition: width .2s ease; }
+  .growth .txt { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .stage { position: relative; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 18px 50px rgba(0,0,0,.45); }
+  canvas { display: block; width: 100%; aspect-ratio: 1000 / 620; height: auto; background: #05243c; }
+  .overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(3, 14, 26, .74);
+    backdrop-filter: blur(3px);
+    transition: opacity .18s ease;
+  }
+  .overlay.hidden { opacity: 0; pointer-events: none; }
+  .panel {
+    width: min(560px, 88%);
+    background: rgba(9, 28, 45, .96);
+    border: 1px solid rgba(120, 200, 235, .26);
+    border-radius: 16px;
+    padding: 26px 30px 28px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  }
+  .panel h2 { margin: 0 0 10px; font-size: 28px; letter-spacing: 3px; }
+  .panel h2 em { color: var(--accent); font-style: normal; }
+  .panel p { margin: 0 0 16px; color: #b9d6e6; font-size: 13px; line-height: 1.9; }
+  .rules { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+  .chip { font-size: 12px; padding: 6px 12px; border-radius: 20px; border: 1px solid var(--line); color: #c9e6f5; }
+  .chip.eat { border-color: rgba(120,255,190,.45); color: #8effc4; }
+  .chip.risk { border-color: rgba(255,107,122,.5); color: #ff9aa6; }
+  .keycaps { display: flex; justify-content: center; gap: 6px; margin-bottom: 20px; }
+  kbd {
+    display: inline-block; min-width: 30px; padding: 5px 8px;
+    border: 1px solid rgba(255,255,255,.24); border-bottom-width: 3px;
+    border-radius: 6px; background: rgba(255,255,255,.07);
+    font: 600 12px/1.2 "Consolas", monospace; color: #e8f6ff;
+  }
+  .result { display: none; gap: 18px; justify-content: center; margin: 4px 0 18px; }
+  .result.show { display: flex; }
+  .result div { min-width: 92px; }
+  .result b { display: block; font-size: 23px; color: var(--gold); }
+  .result span { font-size: 11px; color: var(--muted); }
+  .tips { margin-top: 12px; font-size: 12px; color: var(--muted); line-height: 1.8; text-align: center; }
+  .tips b { color: #cdeaf8; font-weight: 600; }
+  @media (max-width: 700px) {
+    .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .hud-actions { justify-content: flex-end; }
+    .growth { grid-column: 1 / -1; }
+    .title { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <h1 class="title">深海<span>吞食</span> · 大鱼吃小鱼</h1>
+    <div class="subtitle">EAT OR BE EATEN</div>
+  </div>
+
+  <div class="hud">
+    <div class="stat"><span class="label">分数 SCORE</span><span class="value" id="scoreVal">0</span></div>
+    <div class="stat"><span class="label">体积 SIZE</span><span class="value" id="radiusVal">18<small>px</small></span></div>
+    <div class="stat"><span class="label">等级 LEVEL</span><span class="value" id="levelVal">鱼苗</span></div>
+    <div class="stat"><span class="label">生命 LIFE</span><span class="value hearts" id="hearts"></span></div>
+    <div class="hud-actions"><button class="btn small" id="pauseBtn" type="button">暂停</button></div>
+    <div class="growth">
+      <div class="bar"><i id="growthBar"></i></div>
+      <span class="txt" id="growthTxt">成长进度 0%</span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <canvas id="game" width="1000" height="620" aria-label="游戏画面"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="panel">
+        <h2 id="ovTitle">深海<em>吞食</em></h2>
+        <p id="ovDesc">你是一条刚出生的小鱼。吞下比你小的鱼慢慢长大，躲开比你大的掠食者。<br>吃得越多，体型越大，深海里能吞下的东西也就越多。</p>
+        <div class="rules" id="ovRules">
+          <span class="chip eat">绿圈 = 可以吞下</span>
+          <span class="chip risk">红圈 = 危险，快跑</span>
+          <span class="chip">被咬 3 次游戏结束</span>
+        </div>
+        <div class="result" id="ovResult">
+          <div><b id="resScore">0</b><span>最终分数</span></div>
+          <div><b id="resSize">18</b><span>最终体积</span></div>
+          <div><b id="resEaten">0</b><span>吞食数量</span></div>
+        </div>
+        <div class="keycaps"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span style="align-self:center;color:#8fb4c9;font-size:12px;margin:0 6px;">移动</span><kbd>SPACE</kbd><span style="align-self:center;color:#8fb4c9;font-size:12px;">暂停</span></div>
+        <button class="btn" id="ovBtn" type="button">开始游戏</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tips">
+    <b>W / A / S / D</b> 或方向键控制游动 · <b>空格 / Esc</b> 暂停 · <b>Enter</b> 开始或重开 · 仅限吞食体型明显小于自己的鱼 · 鱼群配色仅为装饰，<b>请以绿 / 红光环判断</b>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ===================== 常量与规则 ===================== */
+  var WORLD = { w: 1000, h: 620 };
+  var RULES = {
+    EAT_RATIO: 0.92,
+    DANGER_RATIO: 1.08,
+    START_R: 18,
+    MAX_R: 130,
+    GROW_K: 0.75,
+    LIVES: 3,
+    INVULN: 1.4,
+    FISH_COUNT: 24,
+    ACCEL: 1050,
+    MAX_SPEED: 285,
+    DRAG: 3.4
+  };
+  var LEVELS = [
+    { r: RULES.START_R, name: '鱼苗' }, { r: 22, name: '小丑鱼' }, { r: 34, name: '梭子鱼' },
+    { r: 50, name: '鲨鱼' }, { r: 75, name: '巨鲸' }, { r: 105, name: '深海霸主' }
+  ];
+
+  /* 鱼体调色板：颜色仅作外观装饰，能否吞食一律以绿 / 红光环为准 */
+  var PALETTES = [
+    { body: ['#b6f5d8', '#4fd1c5', '#178a95'], fin: '#7ce8cf' },
+    { body: ['#d8f58a', '#8ed645', '#3e9138'], fin: '#a8e866' },
+    { body: ['#ffe98c', '#f9c73f', '#d1871f'], fin: '#ffdc63' },
+    { body: ['#ffc08a', '#f4843f', '#bd4b28'], fin: '#ffa763' },
+    { body: ['#ffb0c4', '#f45f8d', '#a92d61'], fin: '#ff8fae' },
+    { body: ['#d3b0ff', '#9264f6', '#5431ae'], fin: '#bb90ff' },
+    { body: ['#a8dcff', '#4799f2', '#2159b5'], fin: '#7cc2ff' },
+    { body: ['#9df5e6', '#28cdbf', '#0e8496'], fin: '#6ee6d8' },
+    { body: ['#ffd6ae', '#f0a06d', '#bb6439'], fin: '#ffc18c' },
+    { body: ['#e2f4ff', '#8fd0f0', '#4289b8'], fin: '#bde8ff' }
+  ];
+  var WEED_COLORS = ['rgba(74,196,150,.62)', 'rgba(56,168,140,.55)', 'rgba(122,208,120,.5)', 'rgba(48,140,164,.55)', 'rgba(150,214,132,.45)'];
+  var CORAL_COLORS = ['rgba(255,126,146,.72)', 'rgba(255,170,105,.62)', 'rgba(196,132,232,.6)', 'rgba(255,205,110,.55)'];
+
+  var errors = [];
+  window.addEventListener('error', function (e) { errors.push(String(e.message || e.error)); });
+  window.addEventListener('unhandledrejection', function (e) { errors.push(String(e.reason)); });
+
+  /* ===================== 纯逻辑（可单测） ===================== */
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+  var EPS = 1e-9;  /* 消除 IEEE 754 浮点误差造成的临界值误判 */
+  function canEat(playerR, fishR) { return fishR < playerR * RULES.EAT_RATIO - EPS; }
+  function isDanger(playerR, fishR) { return fishR > playerR * RULES.DANGER_RATIO + EPS; }
+  function growRadius(playerR, fishR) {
+    return Math.min(RULES.MAX_R, Math.sqrt(playerR * playerR + Math.pow(fishR * RULES.GROW_K, 2)));
+  }
+  function isOverlapping(p, f) { return dist(p, f) < p.r + f.r - 4; }
+  function levelOf(r) {
+    var idx = 0;
+    for (var i = 0; i < LEVELS.length; i++) { if (r >= LEVELS[i].r) idx = i; }
+    return { index: idx, name: LEVELS[idx].name, from: LEVELS[idx].r, to: LEVELS[idx + 1] ? LEVELS[idx + 1].r : RULES.MAX_R };
+  }
+  /* 靠近画面边界的鱼渐隐程度：中心为 1，完全出界为 0 */
+  function edgeFade(x, y, r) {
+    var e = Math.min(x, WORLD.w - x, y, WORLD.h - y);
+    return clamp((e + r) / (r * 2.2), 0, 1);
+  }
+  function rand(a, b) { return a + Math.random() * (b - a); }
+
+  /* ===================== DOM / Canvas ===================== */
+  var canvas = document.getElementById('game');
+  var ctx = canvas.getContext('2d');
+  var overlay = document.getElementById('overlay');
+  var ovTitle = document.getElementById('ovTitle');
+  var ovDesc = document.getElementById('ovDesc');
+  var ovRules = document.getElementById('ovRules');
+  var ovResult = document.getElementById('ovResult');
+  var ovBtn = document.getElementById('ovBtn');
+  var pauseBtn = document.getElementById('pauseBtn');
+  var el = {
+    score: document.getElementById('scoreVal'),
+    radius: document.getElementById('radiusVal'),
+    level: document.getElementById('levelVal'),
+    hearts: document.getElementById('hearts'),
+    bar: document.getElementById('growthBar'),
+    barTxt: document.getElementById('growthTxt'),
+    resScore: document.getElementById('resScore'),
+    resSize: document.getElementById('resSize'),
+    resEaten: document.getElementById('resEaten')
+  };
+
+  var viewScale = 1, bgGradient = null;
+  function resize() {
+    var rect = canvas.getBoundingClientRect();
+    var cssW = rect.width || WORLD.w;
+    var cssH = rect.height || cssW * WORLD.h / WORLD.w;
+    if (rect.height < 1) { canvas.style.height = cssH + 'px'; }
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.max(1, Math.round(cssW * dpr));
+    canvas.height = Math.max(1, Math.round(cssH * dpr));
+    viewScale = cssW / WORLD.w * dpr;
+    bgGradient = ctx.createLinearGradient(0, 0, 0, WORLD.h);
+    bgGradient.addColorStop(0, '#0b3c5c');
+    bgGradient.addColorStop(0.45, '#07304b');
+    bgGradient.addColorStop(1, '#04182a');
+  }
+  window.addEventListener('resize', resize);
+
+  /* ===================== 游戏状态 ===================== */
+  var state = 'ready';
+  var auto = true;
+  var player, fishes, bubbles, particles, floaters, crabs, seabed;
+  var score, lives, eaten, invuln, shake, elapsed, frames;
+  var keys = new Set();
+
+  function makeBubbles() {
+    var arr = [];
+    for (var i = 0; i < 46; i++) {
+      arr.push({ x: rand(0, WORLD.w), y: rand(0, WORLD.h), r: rand(1.2, 4.2), sp: rand(9, 30), a: rand(.12, .42) });
+    }
+    return arr;
+  }
+
+  /* 海底生态：小螃蟹 + 成簇海草 + 珊瑚 + 卵石 + 海星（纯装饰，不参与碰撞） */
+  function makeDecor() {
+    crabs = [];
+    for (var i = 0; i < 6; i++) {
+      crabs.push({
+        x: rand(50, WORLD.w - 50), y: WORLD.h - rand(10, 24),
+        s: rand(.75, 1.35), dir: Math.random() < .5 ? -1 : 1,
+        sp: rand(9, 24), phase: rand(0, 6.28),
+        color: Math.random() < .5 ? '#ff8a6b' : '#ffc06a'
+      });
+    }
+    seabed = [];
+    var clusters = 11;
+    for (var c = 0; c < clusters; c++) {
+      var cx = 24 + c * (WORLD.w - 48) / (clusters - 1) + rand(-22, 22);
+      var n = 2 + Math.floor(Math.random() * 3);
+      for (var j = 0; j < n; j++) {
+        seabed.push({
+          type: 'weed', x: cx + rand(-16, 16), h: rand(42, 112), w: rand(2.8, 5.5),
+          phase: rand(0, 6.28), lean: rand(-1, 1),
+          color: WEED_COLORS[Math.floor(Math.random() * WEED_COLORS.length)]
+        });
+      }
+    }
+    for (var k = 0; k < 5; k++) seabed.push({ type: 'coral', x: rand(40, WORLD.w - 40), h: rand(28, 58), color: CORAL_COLORS[k % CORAL_COLORS.length], phase: rand(0, 6.28) });
+    for (var m = 0; m < 9; m++) seabed.push({ type: 'stone', x: rand(0, WORLD.w), w: rand(12, 34), h: rand(5, 11) });
+    for (var q = 0; q < 3; q++) seabed.push({ type: 'star', x: rand(60, WORLD.w - 60), s: rand(7, 12), color: q % 2 ? '#ffb35c' : '#ff8fa8', phase: rand(0, 6.28) });
+  }
+
+  function makeFish(spec) {
+    spec = spec || {};
+    var pR = player ? player.r : RULES.START_R;
+    var r = spec.r;
+    if (r == null) {
+      var roll = Math.random();
+      if (roll < 0.6) r = clamp(pR * rand(0.34, 0.84), 6, RULES.MAX_R);
+      else r = clamp(pR * rand(1.16, 1.72), 6, RULES.MAX_R);
+    }
+    r = clamp(r, 5, RULES.MAX_R);
+    var x, y, edge = spec.edge == null ? Math.floor(Math.random() * 4) : spec.edge;
+    var m = r + 12;
+    if (edge === 0) { x = -m; y = rand(0, WORLD.h); }
+    else if (edge === 1) { x = WORLD.w + m; y = rand(0, WORLD.h); }
+    else if (edge === 2) { x = rand(0, WORLD.w); y = -m; }
+    else { x = rand(0, WORLD.w); y = WORLD.h + m; }
+
+    if (spec.inField) {
+      var tries = 0;
+      do {
+        x = rand(r + 14, WORLD.w - r - 14);
+        y = rand(r + 14, WORLD.h - r - 14);
+        tries++;
+      } while (player && Math.hypot(x - player.x, y - player.y) < 150 + player.r && tries < 40);
+    }
+    if (spec.x != null) x = spec.x;
+    if (spec.y != null) y = spec.y;
+
+    var speed = rand(26, 58) * Math.pow(16 / (r + 10), 0.32);
+    var angle = Math.atan2(WORLD.h / 2 - y, WORLD.w / 2 - x) + rand(-0.55, 0.55);
+    var vx = spec.vx == null ? Math.cos(angle) * speed : spec.vx;
+    var vy = spec.vy == null ? Math.sin(angle) * speed : spec.vy;
+    return {
+      x: x, y: y, r: r, vx: vx, vy: vy,
+      phase: rand(0, Math.PI * 2),
+      pal: spec.pal == null ? Math.floor(Math.random() * PALETTES.length) : (spec.pal % PALETTES.length + PALETTES.length) % PALETTES.length,
+      pattern: spec.pattern == null ? Math.floor(Math.random() * 3) : spec.pattern
+    };
+  }
+
+  function resetGame() {
+    player = { x: WORLD.w / 2, y: WORLD.h / 2, r: RULES.START_R, vx: 0, vy: 0, dir: 1 };
+    score = 0; lives = RULES.LIVES; eaten = 0; invuln = 0; shake = 0; elapsed = 0; frames = 0;
+    fishes = []; particles = []; floaters = []; bubbles = makeBubbles();
+    makeDecor();
+    for (var i = 0; i < RULES.FISH_COUNT; i++) fishes.push(makeFish({ inField: true, edge: i % 4 }));
+    keys.clear();
+    updateHUD();
+  }
+
+  function startGame() {
+    resetGame();
+    state = 'playing';
+    showOverlay(false);
+    pauseBtn.textContent = '暂停';
+  }
+
+  function gameOver() {
+    state = 'over';
+    showOverlay(true, 'over');
+  }
+
+  function togglePause() {
+    if (state === 'playing') { state = 'paused'; showOverlay(true, 'paused'); pauseBtn.textContent = '继续'; }
+    else if (state === 'paused') { state = 'playing'; showOverlay(false); pauseBtn.textContent = '暂停'; }
+  }
+
+  function showOverlay(visible, mode) {
+    overlay.classList.toggle('hidden', !visible);
+    if (!visible) return;
+    ovRules.style.display = mode === 'over' ? 'none' : 'flex';
+    ovResult.classList.toggle('show', mode === 'over');
+    if (mode === 'over') {
+      ovTitle.innerHTML = '游戏<em>结束</em>';
+      ovDesc.innerHTML = '你被更大的掠食者吞没了。<br>再来一局，看看能不能长成深海霸主。';
+      el.resScore.textContent = String(score);
+      el.resSize.textContent = String(Math.round(player.r));
+      el.resEaten.textContent = String(eaten);
+      ovBtn.textContent = '再来一局';
+    } else if (mode === 'paused') {
+      ovTitle.innerHTML = '已<em>暂停</em>';
+      ovDesc.innerHTML = '深海暂时静止了。<br>按空格、Esc 或点击按钮继续。';
+      ovBtn.textContent = '继续游戏';
+    } else {
+      ovTitle.innerHTML = '深海<em>吞食</em>';
+      ovDesc.innerHTML = '你是一条刚出生的小鱼。吞下比你小的鱼慢慢长大，躲开比你大的掠食者。<br>吃得越多，体型越大，深海里能吞下的东西也就越多。';
+      ovBtn.textContent = '开始游戏';
+    }
+  }
+
+  function updateHUD() {
+    if (!player) return;
+    el.score.textContent = String(score);
+    el.radius.innerHTML = Math.round(player.r) + '<small>px</small>';
+    var lv = levelOf(player.r);
+    el.level.textContent = lv.name;
+    var pct = lv.to > lv.from ? clamp((player.r - lv.from) / (lv.to - lv.from), 0, 1) : 1;
+    el.bar.style.width = (pct * 100).toFixed(1) + '%';
+    el.barTxt.textContent = (lv.index >= LEVELS.length - 1 ? '已达顶级' : '成长进度 ' + Math.round(pct * 100) + '%') + ' · 已吞食 ' + eaten + ' 条';
+    var h = '';
+    for (var i = 0; i < RULES.LIVES; i++) h += '<i class="heart' + (i < lives ? '' : ' lost') + '"></i>';
+    el.hearts.innerHTML = h;
+  }
+
+  /* ===================== 帧逻辑 ===================== */
+  function spawnParticles(x, y, color, n) {
+    for (var i = 0; i < n; i++) {
+      var a = rand(0, Math.PI * 2), s = rand(40, 150);
+      particles.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(.35, .8), max: .8, r: rand(1.5, 4), color: color });
+    }
+  }
+
+  function step(dt) {
+    if (state !== 'playing') return;
+    elapsed += dt; frames++;
+
+    var ax = 0, ay = 0;
+    if (keys.has('a') || keys.has('arrowleft')) ax -= 1;
+    if (keys.has('d') || keys.has('arrowright')) ax += 1;
+    if (keys.has('w') || keys.has('arrowup')) ay -= 1;
+    if (keys.has('s') || keys.has('arrowdown')) ay += 1;
+    if (ax || ay) {
+      var len = Math.hypot(ax, ay);
+      ax /= len; ay /= len;
+      player.vx += ax * RULES.ACCEL * dt;
+      player.vy += ay * RULES.ACCEL * dt;
+      if (Math.abs(player.vx) > 25) player.dir = player.vx > 0 ? 1 : -1;
+    }
+    var damp = 1 / (1 + RULES.DRAG * dt);
+    player.vx *= damp; player.vy *= damp;
+    var sp = Math.hypot(player.vx, player.vy);
+    var maxSp = RULES.MAX_SPEED * clamp(1 - (player.r - RULES.START_R) / 420, 0.62, 1);
+    if (sp > maxSp) { player.vx *= maxSp / sp; player.vy *= maxSp / sp; }
+    player.x = clamp(player.x + player.vx * dt, player.r, WORLD.w - player.r);
+    player.y = clamp(player.y + player.vy * dt, player.r, WORLD.h - player.r);
+    if (player.x === player.r || player.x === WORLD.w - player.r) player.vx = 0;
+    if (player.y === player.r || player.y === WORLD.h - player.r) player.vy = 0;
+    if (invuln > 0) invuln = Math.max(0, invuln - dt);
+    if (shake > 0) shake = Math.max(0, shake - dt * 22);
+
+    for (var i = 0; i < fishes.length; i++) {
+      var f = fishes[i];
+      var d = Math.max(1, Math.hypot(player.x - f.x, player.y - f.y));
+      if (canEat(player.r, f.r) && d < 180) {
+        f.vx += (f.x - player.x) / d * 105 * dt;
+        f.vy += (f.y - player.y) / d * 105 * dt;
+      } else if (isDanger(player.r, f.r) && d < 250) {
+        f.vx += (player.x - f.x) / d * 62 * dt;
+        f.vy += (player.y - f.y) / d * 62 * dt;
+      }
+      f.vy += Math.sin(elapsed * 1.6 + f.phase) * 5 * dt;
+      var fsp = Math.hypot(f.vx, f.vy);
+      var fmax = 42 + 70 * Math.pow(16 / (f.r + 10), 0.3);
+      if (fsp > fmax) { f.vx *= fmax / fsp; f.vy *= fmax / fsp; }
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+    }
+
+    for (var j = fishes.length - 1; j >= 0; j--) {
+      var t = fishes[j];
+      if (!isOverlapping(player, t)) continue;
+      if (canEat(player.r, t.r)) {
+        var before = player.r;
+        player.r = growRadius(player.r, t.r);
+        eaten++;
+        var gain = Math.round(t.r * 2) + 1;
+        score += gain;
+        spawnParticles(t.x, t.y, '#8effc4', 12);
+        floaters.push({ x: t.x, y: t.y, text: '+' + gain, life: .9, color: '#ffd166' });
+        fishes.splice(j, 1);
+        if (player.r > before + 2) shake = Math.min(5, shake + 1.2);
+      } else if (isDanger(player.r, t.r)) {
+        if (invuln <= 0) {
+          lives--;
+          invuln = RULES.INVULN;
+          shake = 12;
+          spawnParticles(player.x, player.y, '#ff8a96', 16);
+          floaters.push({ x: player.x, y: player.y - player.r, text: '-1 生命', life: 1.1, color: '#ff6b7a' });
+          var kb = Math.max(1, Math.hypot(player.x - t.x, player.y - t.y));
+          player.vx += (player.x - t.x) / kb * 220;
+          player.vy += (player.y - t.y) / kb * 220;
+        }
+      } else {
+        var nd = Math.max(1, Math.hypot(player.x - t.x, player.y - t.y));
+        player.x = clamp(player.x + (player.x - t.x) / nd * 26 * dt, player.r, WORLD.w - player.r);
+        player.y = clamp(player.y + (player.y - t.y) / nd * 26 * dt, player.r, WORLD.h - player.r);
+      }
+      if (lives <= 0) { updateHUD(); gameOver(); return; }
+    }
+
+    for (var k = fishes.length - 1; k >= 0; k--) {
+      var g = fishes[k];
+      if (g.x < -160 || g.x > WORLD.w + 160 || g.y < -160 || g.y > WORLD.h + 160) fishes.splice(k, 1);
+    }
+    var guard = 0;
+    while (fishes.length < RULES.FISH_COUNT && guard++ < RULES.FISH_COUNT) fishes.push(makeFish({}));
+
+    for (var a = particles.length - 1; a >= 0; a--) {
+      var pt = particles[a];
+      pt.life -= dt; pt.x += pt.vx * dt; pt.y += pt.vy * dt; pt.vx *= .96; pt.vy *= .96;
+      if (pt.life <= 0) particles.splice(a, 1);
+    }
+    for (var b = floaters.length - 1; b >= 0; b--) {
+      var fl = floaters[b];
+      fl.life -= dt; fl.y -= 32 * dt;
+      if (fl.life <= 0) floaters.splice(b, 1);
+    }
+    for (var c = 0; c < bubbles.length; c++) {
+      var bu = bubbles[c];
+      bu.y -= bu.sp * dt;
+      bu.x += Math.sin(elapsed + c) * 4 * dt;
+      if (bu.y < -8) { bu.y = WORLD.h + 8; bu.x = rand(0, WORLD.w); }
+    }
+    for (var cr = 0; cr < crabs.length; cr++) {
+      var cb = crabs[cr];
+      cb.x += cb.dir * cb.sp * dt;
+      if (cb.x < 30 || cb.x > WORLD.w - 30) {
+        cb.dir *= -1;
+        cb.x = clamp(cb.x, 30, WORLD.w - 30);
+      }
+    }
+    updateHUD();
+  }
+
+  /* ===================== 渲染 ===================== */
+  function drawFish(f, isPlayer) {
+    var r = f.r;
+    var flip = isPlayer ? player.dir : (f.vx < 0 ? -1 : 1);
+    var hint = isPlayer ? '' : (canEat(player.r, f.r) ? 'edible' : (isDanger(player.r, f.r) ? 'danger' : 'neutral'));
+    var wobble = Math.sin(elapsed * 6 + f.phase) * 0.09;
+    var pal = isPlayer ? null : PALETTES[f.pal % PALETTES.length];
+    /* 靠近边界的鱼渐隐，避免画面边缘出现被裁断的半条鱼 */
+    var fade = isPlayer ? 1 : edgeFade(f.x, f.y, r);
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.scale(flip, 1);
+    ctx.rotate(wobble * 0.35);
+    ctx.globalAlpha = (isPlayer && invuln > 0) ? 0.45 + 0.55 * Math.abs(Math.sin(elapsed * 14)) : fade;
+
+    if (isPlayer) {
+      /* 玩家标识：头顶金色三角，便于在鱼群中快速定位 */
+      ctx.beginPath();
+      ctx.moveTo(0, -r * 1.82);
+      ctx.lineTo(-r * .26, -r * 2.34);
+      ctx.lineTo(r * .26, -r * 2.34);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(255,209,102,.95)';
+      ctx.fill();
+    }
+
+    if (hint) {
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 1.55, 0, Math.PI * 2);
+      ctx.setLineDash([6, 7]);
+      ctx.lineWidth = 1.8;
+      ctx.strokeStyle = hint === 'edible' ? 'rgba(126,255,190,.75)' : hint === 'danger' ? 'rgba(255,107,122,.8)' : 'rgba(220,230,240,.28)';
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    var tail = Math.sin(elapsed * 9 + f.phase) * r * 0.16;
+    ctx.beginPath();
+    ctx.moveTo(-r * 1.15, 0);
+    ctx.lineTo(-r * 1.95, -r * 0.78 + tail);
+    ctx.lineTo(-r * 1.72, 0);
+    ctx.lineTo(-r * 1.95, r * 0.78 + tail);
+    ctx.closePath();
+    ctx.fillStyle = isPlayer ? 'rgba(255,180,90,.92)' : pal.fin;
+    ctx.fill();
+
+    var bodyGrad = ctx.createLinearGradient(0, -r, 0, r);
+    if (isPlayer) {
+      bodyGrad.addColorStop(0, '#ffe27a'); bodyGrad.addColorStop(.5, '#ffb347'); bodyGrad.addColorStop(1, '#e8743c');
+    } else {
+      bodyGrad.addColorStop(0, pal.body[0]); bodyGrad.addColorStop(.52, pal.body[1]); bodyGrad.addColorStop(1, pal.body[2]);
+    }
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 1.42, r * 0.94, 0, 0, Math.PI * 2);
+    ctx.fillStyle = bodyGrad;
+    ctx.shadowColor = isPlayer ? 'rgba(255,190,90,.55)' : 'rgba(0,0,0,.35)';
+    ctx.shadowBlur = isPlayer ? 22 : 10;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = isPlayer ? 2.2 : 1.5;
+    ctx.strokeStyle = isPlayer ? 'rgba(255,255,255,.65)' : 'rgba(255,255,255,.2)';
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(-r * .25, -r * .82);
+    ctx.quadraticCurveTo(-r * .1, -r * 1.5, r * .5, -r * .78);
+    ctx.closePath();
+    ctx.fillStyle = isPlayer ? 'rgba(255,214,120,.9)' : pal.fin;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-r * .15, r * .78);
+    ctx.quadraticCurveTo(r * .1, r * 1.35, r * .55, r * .72);
+    ctx.closePath();
+    ctx.fill();
+
+    /* 花纹：1=条纹 2=斑点 0=纯色 */
+    if (!isPlayer && f.pattern > 0) {
+      ctx.save();
+      ctx.beginPath(); ctx.ellipse(0, 0, r * 1.42, r * .94, 0, 0, Math.PI * 2); ctx.clip();
+      if (f.pattern === 1) {
+        ctx.strokeStyle = 'rgba(255,255,255,.2)'; ctx.lineWidth = r * .2;
+        for (var s = -1; s <= 1; s++) {
+          ctx.beginPath(); ctx.moveTo(r * s * .55, -r); ctx.lineTo(r * (s * .55 - .3), r); ctx.stroke();
+        }
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,.24)';
+        for (var d = 0; d < 5; d++) {
+          var px = -r * .85 + (d % 3) * r * .78;
+          var py = (d < 3 ? -1 : 1) * r * .42;
+          ctx.beginPath(); ctx.arc(px, py, r * .15, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
+    ctx.beginPath();
+    ctx.arc(r * .78, -r * .24, Math.max(2.2, r * .19), 0, Math.PI * 2);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.beginPath();
+    ctx.arc(r * .83, -r * .24, Math.max(1.1, r * .095), 0, Math.PI * 2);
+    ctx.fillStyle = '#10222f'; ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(r * 1.36, r * .12);
+    ctx.quadraticCurveTo(r * 1.18, r * .28, r * 1.02, r * .14);
+    ctx.strokeStyle = 'rgba(20,40,55,.6)'; ctx.lineWidth = Math.max(1, r * .055); ctx.stroke();
+    ctx.restore();
+  }
+
+  /* 海底背景层：沙地、卵石、珊瑚、海星、成簇海草（随水流摆动） */
+  function drawSeabed() {
+    ctx.save();
+    var sand = ctx.createLinearGradient(0, WORLD.h - 78, 0, WORLD.h);
+    sand.addColorStop(0, 'rgba(6,40,58,0)');
+    sand.addColorStop(1, 'rgba(9,58,70,.68)');
+    ctx.fillStyle = sand;
+    ctx.fillRect(0, WORLD.h - 78, WORLD.w, 78);
+
+    for (var i = 0; i < seabed.length; i++) {
+      var o = seabed[i];
+      if (o.type === 'stone') {
+        ctx.beginPath();
+        ctx.ellipse(o.x, WORLD.h - o.h * .35, o.w * .5, o.h * .45, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(24,70,86,.85)'; ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(o.x - o.w * .12, WORLD.h - o.h * .6, o.w * .22, o.h * .18, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(120,180,190,.2)'; ctx.fill();
+      } else if (o.type === 'weed') {
+        var sway = Math.sin(elapsed * 1.05 + o.phase) * (14 + o.h * .13) + o.lean * 10;
+        ctx.beginPath();
+        ctx.moveTo(o.x, WORLD.h);
+        ctx.bezierCurveTo(o.x - sway * .35, WORLD.h - o.h * .38, o.x + sway * .7, WORLD.h - o.h * .72, o.x + sway, WORLD.h - o.h);
+        ctx.strokeStyle = o.color; ctx.lineWidth = o.w; ctx.lineCap = 'round'; ctx.stroke();
+        for (var l = 1; l <= 2; l++) {
+          var ly = WORLD.h - o.h * (l / 3);
+          var lx = o.x + sway * (l / 3) * .45;
+          var side = (l % 2) ? 1 : -1;
+          ctx.beginPath();
+          ctx.ellipse(lx + side * o.w * 1.5, ly, o.w * 1.7, o.w * .62, side * .5, 0, Math.PI * 2);
+          ctx.fillStyle = o.color; ctx.fill();
+        }
+      } else if (o.type === 'coral') {
+        var sw = Math.sin(elapsed * .8 + o.phase) * 3;
+        ctx.strokeStyle = o.color; ctx.lineWidth = 5; ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(o.x, WORLD.h - 4);
+        ctx.lineTo(o.x + sw, WORLD.h - o.h * .6);
+        ctx.lineTo(o.x - o.h * .28 + sw, WORLD.h - o.h);
+        ctx.moveTo(o.x + sw * .6, WORLD.h - o.h * .5);
+        ctx.lineTo(o.x + o.h * .3 + sw, WORLD.h - o.h * .82);
+        ctx.moveTo(o.x - o.h * .18 + sw, WORLD.h - o.h * .72);
+        ctx.lineTo(o.x - o.h * .36 + sw, WORLD.h - o.h * .9);
+        ctx.stroke();
+        var tips = [[-o.h * .28, -o.h], [o.h * .3, -o.h * .82], [-o.h * .36, -o.h * .9]];
+        for (var t = 0; t < tips.length; t++) {
+          ctx.beginPath();
+          ctx.arc(o.x + tips[t][0] + sw, WORLD.h + tips[t][1], 3.6, 0, Math.PI * 2);
+          ctx.fillStyle = o.color; ctx.fill();
+        }
+      } else if (o.type === 'star') {
+        var pulse = 1 + Math.sin(elapsed * 1.6 + o.phase) * .06;
+        ctx.save();
+        ctx.translate(o.x, WORLD.h - 8);
+        ctx.rotate(Math.sin(elapsed * .5 + o.phase) * .12);
+        ctx.scale(pulse, pulse);
+        ctx.beginPath();
+        for (var a = 0; a < 10; a++) {
+          var rr = (a % 2 === 0) ? o.s : o.s * .45;
+          var ang = -Math.PI / 2 + a * Math.PI / 5;
+          var ax = Math.cos(ang) * rr, ay = Math.sin(ang) * rr;
+          if (a === 0) ctx.moveTo(ax, ay); else ctx.lineTo(ax, ay);
+        }
+        ctx.closePath();
+        ctx.fillStyle = o.color; ctx.fill();
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+  }
+
+  /* 前景层：横向爬行的小螃蟹（腿摆动、钳子张合、眼柄） */
+  function drawCrabs() {
+    for (var i = 0; i < crabs.length; i++) {
+      var c = crabs[i];
+      var s = c.s;
+      var bob = Math.sin(elapsed * 7 + c.phase);
+      ctx.save();
+      ctx.translate(c.x, c.y + Math.abs(bob) * 1.2);
+      ctx.scale(c.dir * s, s);
+
+      ctx.strokeStyle = 'rgba(255,150,110,.9)'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+      for (var l = 0; l < 3; l++) {
+        var off = -8 + l * 8;
+        var sw = Math.sin(elapsed * 7 + c.phase + l) * 2.4;
+        ctx.beginPath();
+        ctx.moveTo(off, -2); ctx.lineTo(off - 7, 6 + sw); ctx.lineTo(off - 11, 9 + sw);
+        ctx.moveTo(off, -2); ctx.lineTo(off + 7, 6 - sw); ctx.lineTo(off + 11, 9 - sw);
+        ctx.stroke();
+      }
+      var claw = Math.sin(elapsed * 5 + c.phase) * .22;
+      for (var side = -1; side <= 1; side += 2) {
+        ctx.save();
+        ctx.translate(side * 14, -6);
+        ctx.rotate(side * (.3 + claw));
+        ctx.beginPath(); ctx.ellipse(0, 0, 6.5, 4.5, 0, 0, Math.PI * 2);
+        ctx.fillStyle = c.color; ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(3, -3); ctx.lineTo(9, -6 + claw * 8); ctx.lineTo(7, 0);
+        ctx.closePath(); ctx.fillStyle = c.color; ctx.fill();
+        ctx.restore();
+      }
+      ctx.beginPath();
+      ctx.ellipse(0, -3, 13, 8.5, 0, Math.PI, Math.PI * 2);
+      ctx.closePath();
+      var g = ctx.createLinearGradient(0, -12, 0, 4);
+      g.addColorStop(0, '#ffd3a8'); g.addColorStop(1, c.color);
+      ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1; ctx.stroke();
+      for (var e = -1; e <= 1; e += 2) {
+        ctx.beginPath(); ctx.moveTo(e * 4, -10); ctx.lineTo(e * 5, -16);
+        ctx.strokeStyle = c.color; ctx.lineWidth = 1.8; ctx.stroke();
+        ctx.beginPath(); ctx.arc(e * 5, -17, 2.4, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.beginPath(); ctx.arc(e * 5 + .5, -17, 1.2, 0, Math.PI * 2);
+        ctx.fillStyle = '#21313e'; ctx.fill();
+      }
+      ctx.beginPath(); ctx.arc(0, -4, 4, .15 * Math.PI, .85 * Math.PI);
+      ctx.strokeStyle = 'rgba(80,40,40,.55)'; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function render(dt) {
+    ctx.setTransform(viewScale, 0, 0, viewScale, 0, 0);
+    ctx.clearRect(0, 0, WORLD.w, WORLD.h);
+    ctx.fillStyle = bgGradient || '#07304b';
+    ctx.fillRect(0, 0, WORLD.w, WORLD.h);
+
+    ctx.save();
+    if (shake > 0) ctx.translate(rand(-shake, shake), rand(-shake, shake));
+
+    for (var i = 0; i < 4; i++) {
+      var lx = 120 + i * 250 + Math.sin(elapsed * .25 + i) * 26;
+      ctx.beginPath();
+      ctx.moveTo(lx, -10); ctx.lineTo(lx + 95, -10);
+      ctx.lineTo(lx + 230, WORLD.h); ctx.lineTo(lx + 60, WORLD.h);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(150,225,255,.035)'; ctx.fill();
+    }
+    for (var b = 0; b < bubbles.length; b++) {
+      var bu = bubbles[b];
+      ctx.beginPath(); ctx.arc(bu.x, bu.y, bu.r, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(190,235,255,' + bu.a + ')'; ctx.lineWidth = 1; ctx.stroke();
+    }
+    drawSeabed();
+
+    var sorted = fishes.slice().sort(function (a, b) { return a.r - b.r; });
+    for (var f = 0; f < sorted.length; f++) drawFish(sorted[f], false);
+    if (player) drawFish(player, true);
+
+    for (var p = 0; p < particles.length; p++) {
+      var pt = particles[p];
+      ctx.globalAlpha = clamp(pt.life / pt.max, 0, 1);
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2);
+      ctx.fillStyle = pt.color; ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'center'; ctx.font = 'bold 16px "Microsoft YaHei", sans-serif';
+    for (var q = 0; q < floaters.length; q++) {
+      var fl = floaters[q];
+      ctx.globalAlpha = clamp(fl.life, 0, 1);
+      ctx.fillStyle = fl.color; ctx.fillText(fl.text, fl.x, fl.y);
+    }
+    ctx.globalAlpha = 1;
+
+    drawCrabs();
+
+    ctx.strokeStyle = 'rgba(140,215,245,.12)'; ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, WORLD.w - 2, WORLD.h - 2);
+    ctx.restore();
+  }
+
+  var last = 0;
+  function frame(now) {
+    var dt = last ? Math.min(0.033, (now - last) / 1000) : 0.016;
+    last = now;
+    if (auto && state === 'playing') step(dt);
+    else if (state !== 'playing') { elapsed += dt; }
+    render(dt);
+    requestAnimationFrame(frame);
+  }
+
+  /* ===================== 输入 ===================== */
+  var CONTROL_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'enter', 'escape'];
+  window.addEventListener('keydown', function (e) {
+    var k = e.key.toLowerCase();
+    if (CONTROL_KEYS.indexOf(k) >= 0) e.preventDefault();
+    if (k === ' ' || k === 'escape') { if (!e.repeat) togglePause(); return; }
+    if (k === 'enter') { if (!e.repeat && (state === 'ready' || state === 'over')) startGame(); return; }
+    keys.add(k);
+  });
+  window.addEventListener('keyup', function (e) { keys.delete(e.key.toLowerCase()); });
+  window.addEventListener('blur', function () { keys.clear(); });
+  ovBtn.addEventListener('click', function () {
+    if (state === 'paused') togglePause();
+    else startGame();
+  });
+  pauseBtn.addEventListener('click', function () { togglePause(); });
+
+  /* ===================== 测试钩子（只读快照 + 确定性场景注入） ===================== */
+  window.__FISH_TEST__ = {
+    WORLD: WORLD,
+    RULES: RULES,
+    pure: { clamp: clamp, dist: dist, canEat: canEat, isDanger: isDanger, growRadius: growRadius, isOverlapping: isOverlapping, levelOf: levelOf, edgeFade: edgeFade },
+    getState: function () {
+      return {
+        state: state, auto: auto,
+        player: player ? { x: player.x, y: player.y, r: player.r, vx: player.vx, vy: player.vy, dir: player.dir } : null,
+        score: score, lives: lives, eaten: eaten, invuln: invuln, elapsed: elapsed, frames: frames,
+        fishCount: fishes ? fishes.length : 0,
+        fish: fishes ? fishes.map(function (f) { return { x: f.x, y: f.y, r: f.r, vx: f.vx, vy: f.vy, pal: f.pal, pattern: f.pattern }; }) : [],
+        decor: {
+          crabs: crabs ? crabs.length : 0,
+          seabed: seabed ? seabed.length : 0,
+          weeds: seabed ? seabed.filter(function (o) { return o.type === 'weed'; }).length : 0,
+          corals: seabed ? seabed.filter(function (o) { return o.type === 'coral'; }).length : 0,
+          palettes: PALETTES.length
+        },
+        keys: Array.from(keys), errors: errors.slice(),
+        overlayVisible: !overlay.classList.contains('hidden')
+      };
+    },
+    setAuto: function (v) { auto = !!v; },
+    start: startGame,
+    pause: togglePause,
+    reset: resetGame,
+    step: step,
+    setPlayer: function (p) { if (p) Object.assign(player, p); },
+    setLives: function (v) { lives = v; updateHUD(); },
+    setInvuln: function (v) { invuln = v; },
+    clearFish: function () { fishes.length = 0; },
+    spawn: function (spec) { fishes.push(makeFish(spec || {})); return fishes.length; },
+    suppressRefill: function (v) { RULES.FISH_COUNT = v ? 0 : 24; }
+  };
+
+  /* ===================== 启动 ===================== */
+  resize();
+  resetGame();
+  showOverlay(true, 'ready');
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
